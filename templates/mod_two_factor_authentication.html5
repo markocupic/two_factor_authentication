@@ -1,0 +1,65 @@
+
+<!-- indexer::stop -->
+<div class="<?= $this->class ?> two_factor_authentication block"<?= $this->cssID ?><?php if ($this->style): ?> style="<?= $this->style ?>"<?php endif; ?>>
+
+    <?php if ($this->headline): ?>
+    <<?= $this->hl ?>><?= $this->headline ?></<?= $this->hl ?>>
+    <?php endif; ?>
+
+
+<?php if($this->caseEnterCode): ?>
+<form<?php if ($this->action): ?> action="<?= $this->action ?>"<?php endif; ?> id="tl_login" method="post">
+
+        <div class="formbody">
+            <?php if ($this->error): ?>
+                <p class="error"><?= $this->error ?></p>
+            <?php endif; ?>
+            <input type="hidden" name="FORM_SUBMIT" value="<?= $this->formSubmit ?>">
+            <input type="hidden" name="REQUEST_TOKEN" value="{{request_token}}">
+            <p>Wenn <?= $this->email ?> mit der E-Mail-Adresse Ihres Kontos übereinstimmt, senden wir Ihnen einen Code.</p>
+            <label for="verification_email_token"><?= $this->labelTwoFactorAuthenticationCode ?></label>
+            <input type="text" name="verification_email_token" id="verification_email_token" class="text" value="<?= $this->value ?>"><br>
+
+            <div class="submit_container">
+                <input type="submit" class="submit" value="Code eingeben">
+            </div>
+        </div>
+<?php endif; ?>
+
+<?php if($this->caseEnterEmail): ?>
+<form<?php if ($this->action): ?> action="<?= $this->action ?>"<?php endif; ?> id="tl_login" method="post">
+
+        <div class="formbody">
+            <?php if ($this->error): ?>
+                <p class="error"><?= $this->error ?></p>
+            <?php endif; ?>
+            <input type="hidden" name="FORM_SUBMIT" value="<?= $this->formSubmit ?>">
+            <input type="hidden" name="REQUEST_TOKEN" value="{{request_token}}">
+            <h2>Konto sch&uuml;tzen</h2>
+            <p>Bevor Sie auf vertrauliche Infos zugreifen k&ouml;nnen, m&uuml;ssen Sie Ihre Identit&auml;t mit einem Sicherheitscode best&auml;tigen. Sie erhalten den Code auf folgende E-Mail-Adresse:</p>
+            {{br}}
+            <div class="email-hint">
+                <?= $this->emailHint ?>
+            </div>
+            {{br}}
+            <p>Geben Sie zur Best&auml;tigung, dass es sich um Ihre E-Mail-Adresse handelt, die Adresse unten ein, und klicken Sie auf "Code senden", um Ihren Code zu erhalten.</p>
+            <label for="email"><?= $this->labelYourEmailAdress ?></label>
+            <input type="text" name="email" id="email" class="text" value="<?= $this->value ?>"><br>
+
+            <div class="submit_container">
+                <input type="submit" class="submit" value="Code senden">
+            </div>
+        </div>
+        </form>
+
+<?php endif; ?>
+
+<?php if($this->caseLoggedIn): ?>
+<h2>Login erfolgreich</h2>
+<p>Sie haben sich erfolgreich eingeloggt.</p>
+<?php endif; ?>
+
+
+</div>
+
+<!-- indexer::continue -->

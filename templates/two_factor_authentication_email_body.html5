@@ -1,0 +1,7 @@
+Sicherheitscode
+Bitte verwenden Sie den folgenden Sicherheitscode für Ihr Konto auf "<?= $this->host ?>".
+Sicherheitscode: <?= $this->code ?>
+
+Mit freundlichen Grüssen
+
+Ihr "<?= $this->host ?>" Team
