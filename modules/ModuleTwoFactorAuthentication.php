@@ -12,7 +12,7 @@ namespace MCupic;
 
 
 /**
- * Front end module "login".
+ * Front end module "Two Factor Authentication".
  *
  * @author Leo Feyer <https://github.com/leofeyer>
  */
@@ -31,9 +31,18 @@ class ModuleTwoFactorAuthentication extends \Module
     protected $error = null;
 
     /**
-     * Display a login form
-     *
+     * @var null
+     */
+    protected $objMember = null;
+
+    /**
+     * @var null
+     */
+    protected $case = null;
+
+    /**
      * @return string
+     * @throws \Exception
      */
     public function generate()
     {
@@ -50,68 +59,67 @@ class ModuleTwoFactorAuthentication extends \Module
 
             return $objTemplate->parse();
         }
+
         global $objPage;
+
 
         if (!FE_USER_LOGGED_IN)
         {
             return '';
         }
 
-        $blnRequiresTwoFactorAuthentication = false;
-
 
         $objMember = \FrontendUser::getInstance();
-
-
-        $strRedirect = null;
-        if ($objMember !== null)
+        if ($objMember === null)
         {
-            $arrGroups = deserialize($objMember->groups);
+            throw new \Exception("User with ID " . $objMember->id . " doesn't exist.");
+        }
 
-            if (!empty($arrGroups) && is_array($arrGroups))
+        // Set the member object
+        $this->objMember = $objMember;
+
+
+        $arrGroups = deserialize($this->objMember->groups);
+        if (!empty($arrGroups) && is_array($arrGroups))
+        {
+            $objGroupPage = TwoFactorAuthentication::findFirstActiveWithJumpToTwoFactorByIds($arrGroups);
+
+            if ($objGroupPage !== null)
             {
-                $objGroupPage = TwoFactorAuthentication::findFirstActiveWithJumpToTwoFactorByIds($arrGroups);
-
-                if ($objGroupPage !== null)
-                {
-                    $blnRequiresTwoFactorAuthentication = true;
-                }
+                $blnRequiresTwoFactorAuthentication = true;
             }
         }
 
+        // User doesn't require two factor authentication
         if ($blnRequiresTwoFactorAuthentication === false)
         {
-            return 'Two Factor Authentication is not required!';
+            return '';
         }
 
 
         // Set case
         if (TwoFactorAuthentication::isLoggedIn())
         {
+            unset($_SESSION['TFA']['CASE_ENTER_CODE']);
             $this->case = 'caseLoggedIn';
 
             // Search for a jumpTo-page
-            $objMember = \FrontendUser::getInstance();
-            if ($objMember !== null)
+            $arrGroups = deserialize($this->objMember->groups);
+            if (!empty($arrGroups) && is_array($arrGroups))
             {
-                $arrGroups = deserialize($objMember->groups);
-
-                if (!empty($arrGroups) && is_array($arrGroups))
+                $objGroupPage = \MemberGroupModel::findFirstActiveWithJumpToByIds($arrGroups);
+                if ($objGroupPage !== null)
                 {
-                    $objGroupPage = \MemberGroupModel::findFirstActiveWithJumpToByIds($arrGroups);
-
-                    if ($objGroupPage !== null)
+                    if ($objPage->alias != $objGroupPage->alias)
                     {
-                        if ($objPage->alias != $objGroupPage->alias)
-                        {
-                            $this->jumpToOrReload($objGroupPage->row());
-                        }
+                        $this->jumpToOrReload($objGroupPage->row());
                     }
                 }
             }
         }
-        elseif ($_SESSION['CASE_ENTER_TWO_FACTOR_AUTHENTIFICATION_CODE'])
+        elseif ($_SESSION['TFA']['CASE_ENTER_CODE'])
         {
+            // Check if there is a valid & not already activated code
             if (TwoFactorAuthentication::hasValidCode())
             {
                 $this->case = 'caseEnterCode';
@@ -119,7 +127,8 @@ class ModuleTwoFactorAuthentication extends \Module
             else
             {
                 $this->case = 'caseEnterEmail';
-                $_SESSION['TWO_FACTOR_ERROR'] = $GLOBALS['TL_LANG']['MSC']['noCodeFound'];
+                unset($_SESSION['TFA']['CASE_ENTER_CODE']);
+                $_SESSION['TFA']['ERROR'] = $GLOBALS['TL_LANG']['TFA']['noCodeFound'];
             }
         }
         else
@@ -128,20 +137,20 @@ class ModuleTwoFactorAuthentication extends \Module
         }
 
 
-        // ENTER E-Mail
+        // Enter E-Mail
         if (\Input::post('FORM_SUBMIT') == 'tl_two_factor_authentification_enter_email')
         {
             // Check whether username and password are set
             if (empty($_POST['email']))
             {
-                $_SESSION['TWO_FACTOR_ERROR'] = $GLOBALS['TL_LANG']['MSC']['enterValidEmail'];
+                $_SESSION['TFA']['ERROR'] = $GLOBALS['TL_LANG']['TFA']['enterValidEmail'];
                 $this->reload();
             }
 
-            if (strtolower(\Input::post('email')) == $objMember->email)
+            if (strtolower(\Input::post('email')) == strtolower($this->objMember->email))
             {
 
-                $_SESSION['CASE_ENTER_TWO_FACTOR_AUTHENTIFICATION_CODE'] = true;
+                $_SESSION['TFA']['CASE_ENTER_CODE'] = true;
                 $strUa = 'N/A';
                 $strIp = '127.0.0.1';
 
@@ -154,7 +163,7 @@ class ModuleTwoFactorAuthentication extends \Module
                     $strIp = \Environment::get('ip');
                 }
                 $objModel = new \TwoFactorAuthenticationModel();
-                $objModel->pid = $objMember->id;
+                $objModel->pid = $this->objMember->id;
                 $objModel->ip = $strIp;
                 $objModel->browser = $strUa;
                 $objModel->verification_email_token = rand(111111, 999999);
@@ -175,25 +184,24 @@ class ModuleTwoFactorAuthentication extends \Module
                 $objTextTemplate->code = $objModel->verification_email_token;
                 $body = $objTextTemplate->parse();
                 $email->text = \StringUtil::decodeEntities(trim($body));
-                $email->sendTo($objMember->email);
+                $email->sendTo($this->objMember->email);
 
                 $this->reload();
-
             }
             else
             {
-                $_SESSION['TWO_FACTOR_ERROR'] = $GLOBALS['TL_LANG']['MSC']['enterValidEmail'];
+                $_SESSION['TFA']['ERROR'] = $GLOBALS['TL_LANG']['TFA']['enterValidEmail'];
                 $this->reload();
             }
         }
 
-        // ENTER Code
+        // Enter Code
         if (\Input::post('FORM_SUBMIT') == 'tl_two_factor_authentification_enter_code')
         {
-            // Check whether username and password are set
+            // Check email token
             if (!empty($_POST['verification_email_token']))
             {
-                $objSet = \Database::getInstance()->prepare('SELECT * FROM tl_two_factor_authentication WHERE pid=? AND verification_email_token = ? AND activated = ? AND tstamp > ?')->limit(1)->execute($objMember->id, \Input::post('verification_email_token'), '', time() - 600);
+                $objSet = \Database::getInstance()->prepare('SELECT * FROM tl_two_factor_authentication WHERE pid=? AND verification_email_token = ? AND activated = ? AND tstamp > ?')->limit(1)->execute($this->objMember->id, \Input::post('verification_email_token'), '', time() - 600);
                 if ($objSet->numRows)
                 {
                     $objTFAM = \TwoFactorAuthenticationModel::findByPk($objSet->id);
@@ -201,21 +209,20 @@ class ModuleTwoFactorAuthentication extends \Module
                     {
                         $objTFAM->activated = '1';
                         $objTFAM->save();
-                        unset($_SESSION['CASE_ENTER_TWO_FACTOR_AUTHENTIFICATION_CODE']);
+                        unset($_SESSION['TFA']['CASE_ENTER_CODE']);
                         $this->reload();
                     }
                 }
-                $_SESSION['TWO_FACTOR_ERROR'] = $GLOBALS['TL_LANG']['MSC']['invalidCode'];
+                $_SESSION['TFA']['ERROR'] = $GLOBALS['TL_LANG']['TFA']['invalidCode'];
                 $this->reload();
             }
-
         }
 
-        // unset $_SESSION['TWO_FACTOR_LOGIN_ERROR'] and store it in $this->errorMsg
-        if (isset($_SESSION['TWO_FACTOR_ERROR']))
+        // Unset $_SESSION['TFA']['ERROR'] and store it in $this->errorMsg
+        if (isset($_SESSION['TFA']['ERROR']))
         {
-            $this->errorMsg = $_SESSION['TWO_FACTOR_ERROR'];
-            unset($_SESSION['TWO_FACTOR_ERROR']);
+            $this->errorMsg = $_SESSION['TFA']['ERROR'];
+            unset($_SESSION['TFA']['ERROR']);
         }
 
 
@@ -228,42 +235,35 @@ class ModuleTwoFactorAuthentication extends \Module
      */
     protected function compile()
     {
-        $blnHasError = false;
         if ($this->case == 'caseLoggedIn')
         {
             $this->Template->caseLoggedIn = true;
         }
         elseif ($this->case == 'caseEnterEmail')
         {
-            $objMember = \FrontendUser::getInstance();
+            $this->Template->action = ampersand(\Environment::get('indexFreeRequest'));
             if ($this->errorMsg)
             {
                 $this->Template->error = $this->errorMsg;
             }
-            $this->Template->emailHint = TwoFactorAuthentication::anonymizeEmail($objMember->email);
+            $this->Template->emailHint = TwoFactorAuthentication::anonymizeEmail($this->objMember->email);
             $this->Template->caseEnterEmail = true;
             $this->Template->formSubmit = 'tl_two_factor_authentification_enter_email';
-            $this->Template->labelYourEmailAdress = $GLOBALS['TL_LANG']['MSC']['labelYourEmailAdress'];
-
+            $this->Template->labelYourEmailAdress = $GLOBALS['TL_LANG']['TFA']['labelYourEmailAdress'];
+            $this->Template->slabel = specialchars($GLOBALS['TL_LANG']['TFA']['slabelEnterEmail']);
         }
         if ($this->case == 'caseEnterCode')
         {
-            $objMember = \FrontendUser::getInstance();
+            $this->Template->action = ampersand(\Environment::get('indexFreeRequest'));
             if ($this->errorMsg)
             {
                 $this->Template->error = $this->errorMsg;
             }
             $this->Template->caseEnterCode = true;
-            $this->Template->email = $objMember->email;
-            $this->Template->labelTwoFactorAuthenticationCode = $GLOBALS['TL_LANG']['MSC']['labelTwoFactorAuthenticationCode'];
+            $this->Template->email = $this->objMember->email;
+            $this->Template->labelTwoFactorAuthenticationCode = $GLOBALS['TL_LANG']['TFA']['labelTwoFactorAuthenticationCode'];
             $this->Template->formSubmit = 'tl_two_factor_authentification_enter_code';
+            $this->Template->slabel = specialchars($GLOBALS['TL_LANG']['TFA']['slabelEnterCode']);
         }
-
-
-        $this->Template->action = ampersand(\Environment::get('indexFreeRequest'));
-        $this->Template->slabel = specialchars($GLOBALS['TL_LANG']['MSC']['login']);
-
     }
-
-
 }

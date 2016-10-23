@@ -21,7 +21,7 @@
             <input type="text" name="verification_email_token" id="verification_email_token" class="text" value="<?= $this->value ?>"><br>
 
             <div class="submit_container">
-                <input type="submit" class="submit" value="Code eingeben">
+                <input type="submit" class="submit" value="<?= $this->slabel ?>">
             </div>
         </div>
 <?php endif; ?>
@@ -44,10 +44,10 @@
             {{br}}
             <p>Geben Sie zur Best&auml;tigung, dass es sich um Ihre E-Mail-Adresse handelt, die Adresse unten ein, und klicken Sie auf "Code senden", um Ihren Code zu erhalten.</p>
             <label for="email"><?= $this->labelYourEmailAdress ?></label>
-            <input type="text" name="email" id="email" class="text" value="<?= $this->value ?>"><br>
+            <input type="text" name="email" id="email" class="text" value=""><br>
 
             <div class="submit_container">
-                <input type="submit" class="submit" value="Code senden">
+                <input type="submit" class="submit" value="<?= $this->slabel ?>">
             </div>
         </div>
         </form>
