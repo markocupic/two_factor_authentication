@@ -8,7 +8,7 @@
 
 
 <?php if($this->caseEnterCode): ?>
-<form<?php if ($this->action): ?> action="<?= $this->action ?>"<?php endif; ?> id="tl_login" method="post">
+<form<?php if ($this->action): ?> action="<?= $this->action ?>"<?php endif; ?> id="two_factor_authentication-enter-code" method="post">
 
         <div class="formbody">
             <?php if ($this->error): ?>
@@ -24,10 +24,11 @@
                 <input type="submit" class="submit" value="<?= $this->slabel ?>">
             </div>
         </div>
+</form>
 <?php endif; ?>
 
 <?php if($this->caseEnterEmail): ?>
-<form<?php if ($this->action): ?> action="<?= $this->action ?>"<?php endif; ?> id="tl_login" method="post">
+<form<?php if ($this->action): ?> action="<?= $this->action ?>"<?php endif; ?> id="two_factor_authentication-enter-email" method="post">
 
         <div class="formbody">
             <?php if ($this->error): ?>
@@ -42,7 +43,7 @@
                 <?= $this->emailHint ?>
             </div>
             {{br}}
-            <p>Geben Sie zur Best&auml;tigung, dass es sich um Ihre E-Mail-Adresse handelt, die Adresse unten ein, und klicken Sie auf "Code senden", um Ihren Code zu erhalten.</p>
+            <p>Geben Sie zur Best&auml;tigung, dass es sich um Ihre E-Mail-Adresse handelt, die Adresse unten ein, und klicken Sie auf "E-Mail-Adresse pr&uuml;fen", um Ihren Code zu erhalten.</p>
             <label for="email"><?= $this->labelYourEmailAdress ?></label>
             <input type="text" name="email" id="email" class="text" value=""><br>
 
@@ -50,7 +51,7 @@
                 <input type="submit" class="submit" value="<?= $this->slabel ?>">
             </div>
         </div>
-        </form>
+</form>
 
 <?php endif; ?>
 

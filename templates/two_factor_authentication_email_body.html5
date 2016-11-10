@@ -1,7 +1,14 @@
-Sicherheitscode
+Guten Tag <?= $this->member->firstname ?> <?= $this->member->lastname ?>
+
 Bitte verwenden Sie den folgenden Sicherheitscode für Ihr Konto auf "<?= $this->host ?>".
+
 Sicherheitscode: <?= $this->code ?>
 
 Mit freundlichen Grüssen
 
 Ihr "<?= $this->host ?>" Team
+
+
+
+------------------------------
+Hinweis: Dies ist eine automatisch generierte Nachricht. Bitte antworten Sie nicht darauf.

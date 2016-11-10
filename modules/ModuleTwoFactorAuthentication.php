@@ -65,7 +65,8 @@ class ModuleTwoFactorAuthentication extends \Module
 
         if (!FE_USER_LOGGED_IN)
         {
-            return '';
+            // Redirect to the ROOT-Page
+            \Controller::redirect('');
         }
 
 
@@ -93,7 +94,8 @@ class ModuleTwoFactorAuthentication extends \Module
         // User doesn't require two factor authentication
         if ($blnRequiresTwoFactorAuthentication === false)
         {
-            return '';
+            // Redirect to the ROOT-Page
+            \Controller::redirect('');
         }
 
 
@@ -166,7 +168,8 @@ class ModuleTwoFactorAuthentication extends \Module
                 $objModel->pid = $this->objMember->id;
                 $objModel->ip = $strIp;
                 $objModel->browser = $strUa;
-                $objModel->verification_email_token = rand(111111, 999999);
+                $verificationEmailToken = rand(111111, 999999);
+                $objModel->verification_email_token = md5($verificationEmailToken);
                 $objModel->tstamp = time();
                 $objModel->expiresOn = time() + $GLOBALS['CONFIG']['TwoFactorAuthentication']['expirationTime'];
                 $objModel->save();
@@ -179,11 +182,14 @@ class ModuleTwoFactorAuthentication extends \Module
                 $email->fromName = 'Administrator';
                 $replyTo = '"' . 'Administrator' . '" <' . $GLOBALS['TL_ADMIN_EMAIL'] . '>';
                 $email->replyTo($replyTo);
-                $objTextTemplate = new \FrontendTemplate('two_factor_authentication_email_body');
-                $objTextTemplate->host = \Environment::get('host');
-                $objTextTemplate->code = $objModel->verification_email_token;
-                $body = $objTextTemplate->parse();
-                $email->text = \StringUtil::decodeEntities(trim($body));
+                $objEmailTemplate = new \FrontendTemplate('two_factor_authentication_email_body');
+                $objEmailTemplate->host = \Environment::get('host');
+                $objEmailTemplate->member = $this->objMember;
+                $objEmailTemplate->code = $verificationEmailToken;
+                $emailBody = $objEmailTemplate->parse();
+                //$email->text = \StringUtil::decodeEntities(trim($emailBody));
+                $email->text = \String::decodeEntities(trim($emailBody));
+
                 $email->sendTo($this->objMember->email);
 
                 $this->reload();
@@ -201,7 +207,7 @@ class ModuleTwoFactorAuthentication extends \Module
             // Check email token
             if (!empty($_POST['verification_email_token']))
             {
-                $objSet = \Database::getInstance()->prepare('SELECT * FROM tl_two_factor_authentication WHERE pid=? AND verification_email_token = ? AND activated = ? AND tstamp > ?')->limit(1)->execute($this->objMember->id, \Input::post('verification_email_token'), '', time() - 600);
+                $objSet = \Database::getInstance()->prepare('SELECT * FROM tl_two_factor_authentication WHERE pid=? AND verification_email_token = ? AND activated = ? AND tstamp > ?')->limit(1)->execute($this->objMember->id, md5(\Input::post('verification_email_token')), '', time() - 600);
                 if ($objSet->numRows)
                 {
                     $objTFAM = \TwoFactorAuthenticationModel::findByPk($objSet->id);
