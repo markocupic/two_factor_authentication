@@ -121,7 +121,7 @@ class ModuleTwoFactorAuthentication extends \Module
         // Set case
         if (TwoFactorAuthentication::isLoggedIn())
         {
-            if(!isset($_SESSION['TFA']))
+            if (!isset($_SESSION['TFA']))
             {
                 // If user lands on this page after he has logged in
                 // return empty string
@@ -130,7 +130,7 @@ class ModuleTwoFactorAuthentication extends \Module
 
             // If user lands on this page just after he has logged in
             // then search for a jumpTo page
-            unset($_SESSION['TFA'];
+            unset($_SESSION['TFA']);
             $this->case = 'caseLoggedIn';
 
             // Search for a jumpTo-page
@@ -226,8 +226,6 @@ class ModuleTwoFactorAuthentication extends \Module
         }
 
 
-
-
         // Enter Code
         if (\Input::post('FORM_SUBMIT') == 'tl_two_factor_authentification_enter_code')
         {
@@ -259,8 +257,6 @@ class ModuleTwoFactorAuthentication extends \Module
         }
 
 
-
-
         // Unset $_SESSION['TFA']['ERROR'] and store it in $this->errorMsg
         if (isset($_SESSION['TFA']['ERROR']))
         {
@@ -271,7 +267,6 @@ class ModuleTwoFactorAuthentication extends \Module
 
         return parent::generate();
     }
-
 
 
     /**
@@ -312,7 +307,6 @@ class ModuleTwoFactorAuthentication extends \Module
     }
 
 
-
     /**
      * @param $strEmail
      * @return string
@@ -332,7 +326,6 @@ class ModuleTwoFactorAuthentication extends \Module
             return $strStart . $strEnd . '@' . $arrEmail[1];
         }
     }
-
 
 
     /**
