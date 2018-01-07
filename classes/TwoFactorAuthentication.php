@@ -15,6 +15,7 @@
 /**
  * Namespace
  */
+
 namespace MCupic;
 
 
@@ -28,10 +29,133 @@ namespace MCupic;
 class TwoFactorAuthentication extends \System
 {
 
+
+
+
+
+    /**
+     * @return string
+     */
+    public static function getBrowserFingerprint()
+    {
+
+        $client_ip = \Environment::get('ip');
+        $accept = $_SERVER['HTTP_ACCEPT'];
+        $useragent = $_SERVER['HTTP_USER_AGENT'];
+        $charset = $_SERVER['HTTP_ACCEPT_CHARSET'];
+        $encoding = $_SERVER['HTTP_ACCEPT_ENCODING'];
+        $language = $_SERVER['HTTP_ACCEPT_LANGUAGE'];
+        $data = '';
+        $data .= $client_ip;
+        $data .= $useragent;
+        $data .= $accept;
+        $data .= $charset;
+        $data .= $encoding;
+        $data .= $language;
+
+        /* Apply SHA256 hash to the browser fingerprint */
+        $hash = hash('sha256', $data);
+
+        return $hash;
+
+    }
+
+
+
+    /**
+     * @param \FrontendUser $objUser
+     */
+    public function deleteExpiredLoginSets(\FrontendUser $objUser)
+    {
+        $expirationTime = $GLOBALS['CONFIG']['TwoFactorAuthentication']['expirationTime'];
+        \Database::getInstance()->prepare('DELETE FROM tl_two_factor_authentication WHERE expiresOn<?')->execute(time() - $expirationTime);
+    }
+
+
+
+    /**
+     * @param \FrontendUser $objUser
+     */
+    public function authenticate(\FrontendUser $objUser)
+    {
+        if (FE_USER_LOGGED_IN)
+        {
+
+            if (self::isLoggedIn())
+            {
+                // User is logged in by two factor authentication
+                // Return everything is ok.
+                return;
+            }
+
+
+            $arrGroupsUserBelongsTo = deserialize($objUser->groups);
+            if (empty($arrGroupsUserBelongsTo) || !is_array($arrGroupsUserBelongsTo))
+            {
+                // User is not assigned to any group
+                // Return everything is ok.
+                return;
+            }
+            else
+            {
+                $objPage = static::findFirstActiveWithJumpToTwoFactorByIds($arrGroupsUserBelongsTo);
+                if ($objPage === null)
+                {
+                    // Two factor authentication is not used for this user
+                    // Return everything is ok.
+                    return;
+                }
+            }
+
+            // Check if there is not expired datarecord in tl_two_factor_authentication
+            // that fits to the current user and his browser fingerprint
+            $strIp = \Environment::get('ip');
+            $strCookie = 'FE_USER_AUTH';
+            $strHash = sha1(session_id() . (!\Config::get('disableIpCheck') ? $strIp : '') . $strCookie);
+            $browserFingerprint = static::getBrowserFingerprint();
+
+            // Token is valid for 1 week. After this the user has to renew the token.
+            $expirationTime = $GLOBALS['CONFIG']['TwoFactorAuthentication']['expirationTime'];
+            $objSet = \Database::getInstance()->prepare("SELECT * FROM tl_two_factor_authentication WHERE pid=? AND browserFingerprint=? AND expiresOn > ? AND activated=?")->limit(1)->execute($objUser->id, $browserFingerprint, time() - $expirationTime, '1');
+            if ($objSet->numRows)
+            {
+                $objTFAM = \TwoFactorAuthenticationModel::findByPk($objSet->id);
+                if ($objTFAM !== null)
+                {
+                    $objTFAM->expiresOn = time() + $GLOBALS['CONFIG']['TwoFactorAuthentication']['expirationTime'];
+                    $objTFAM->save();
+
+                    // Update Session
+                    \Database::getInstance()->prepare("UPDATE tl_session SET twoFactorAuthenticated=? WHERE hash=?")
+                        ->execute('1', $strHash);
+
+                    // Return everything is ok.
+                    return;
+                }
+            }
+
+
+
+            // Authentication failed
+            // User will be redirected to the two factor authentication form
+            // where he can request a login token, that will be sent to his email address
+            // If he enters the correct token the login process will succeed
+            $strRedirect = \Controller::generateFrontendUrl($objPage->row(), null, null, true);
+            // Prevent endless redirect
+            if (\Environment::get('indexFreeRequest') != $strRedirect)
+            {
+                // Redirect to the target page where user can enter his email address and then enter the token
+                \Controller::redirect($strRedirect);
+            }
+        }
+    }
+
+
+
     /**
      * Find the first active group with a published jumpToTwoFactor page
      *
-     * @param string $arrIds An array of member group IDs
+     * @param string $arrIds An array of ids of member groups the user belongs to
      *
      * @return \MemberGroupModel|null The model or null if there is no matching member group
      */
@@ -58,19 +182,6 @@ class TwoFactorAuthentication extends \System
     }
 
     /**
-     * @param $strContent
-     * @param $strTemplate
-     * @return mixed
-     */
-    public function deleteExpiredLoginSets($strContent, $strTemplate)
-    {
-        $expirationTime = $GLOBALS['CONFIG']['TwoFactorAuthentication']['expirationTime'];
-        \Database::getInstance()->prepare('DELETE FROM tl_two_factor_authentication WHERE expiresOn<?')->execute(time() - $expirationTime);
-        return $strContent;
-    }
-
-
-    /**
      * @return bool
      */
     public static function isLoggedIn()
@@ -81,73 +192,21 @@ class TwoFactorAuthentication extends \System
             return false;
         }
 
-        $objMember = \FrontendUser::getInstance();
-        if ($objMember === null)
+        $objUser = \FrontendUser::getInstance();
+        if ($objUser === null)
         {
             return false;
         }
 
+        $strIp = \Environment::get('ip');
+        $strCookie = 'FE_USER_AUTH';
+        $strHash = sha1(session_id() . (!\Config::get('disableIpCheck') ? $strIp : '') . $strCookie);
 
-        $strUa = 'N/A';
-        $strIp = '127.0.0.1';
+        $objSession = \Database::getInstance()->prepare("SELECT * FROM tl_session WHERE hash=? AND twoFactorAuthenticated=?")
+            ->execute($strHash, '1');
 
-        if (\Environment::get('httpUserAgent'))
-        {
-            $strUa = \Environment::get('httpUserAgent');
-        }
-        if (\Environment::get('remoteAddr'))
-        {
-            $strIp = \Environment::get('ip');
-        }
-        // token is valid for one week. After the user has to renew the token.
-        $expirationTime = $GLOBALS['CONFIG']['TwoFactorAuthentication']['expirationTime'];
-        $objSet = \Database::getInstance()->prepare("SELECT * FROM tl_two_factor_authentication WHERE pid=? AND ip=? AND browser=? AND expiresOn > ? AND activated=?")->limit(1)->execute($objMember->id, $strIp, $strUa, time() - $expirationTime, '1');
-        if ($objSet->numRows)
-        {
-            $objTFAM = \TwoFactorAuthenticationModel::findByPk($objSet->id);
-            if ($objTFAM !== null)
-            {
-                $objTFAM->expiresOn = time() + $GLOBALS['CONFIG']['TwoFactorAuthentication']['expirationTime'];
-                $objTFAM->save();
-            }
-            return true;
-        }
-
-        return false;
-
-    }
-
-    /**
-     * @return bool
-     */
-    public static function hasValidCode()
-    {
-
-        if (!FE_USER_LOGGED_IN)
-        {
-            return false;
-        }
-
-        $objMember = \FrontendUser::getInstance();
-        if ($objMember === null)
-        {
-            return false;
-        }
-
-        $strUa = 'N/A';
-        $strIp = '127.0.0.1';
-
-        if (\Environment::get('httpUserAgent'))
-        {
-            $strUa = \Environment::get('httpUserAgent');
-        }
-        if (\Environment::get('remoteAddr'))
-        {
-            $strIp = \Environment::get('ip');
-        }
-        // token is valid for 10 min. After the user has to generate a new token.
-        $objSet = \Database::getInstance()->prepare("SELECT * FROM tl_two_factor_authentication WHERE pid=? AND ip=? AND browser=? AND tstamp > ? AND activated=?")->limit(1)->execute($objMember->id, $strIp, $strUa, time() - 600, '');
-        if ($objSet->numRows)
+        // Try to find the session in the database
+        if ($objSession->numRows)
         {
             return true;
         }
@@ -156,61 +215,5 @@ class TwoFactorAuthentication extends \System
 
     }
 
-
-    /**
-     * @param $strContent
-     * @param $strTemplate
-     * @return mixed
-     */
-    public function parseFrontendTemplate($strContent, $strTemplate)
-    {
-        if (FE_USER_LOGGED_IN)
-        {
-            if (!self::isLoggedIn())
-            {
-                $objMember = \FrontendUser::getInstance();
-
-                if ($objMember !== null)
-                {
-                    $arrGroups = deserialize($objMember->groups);
-
-                    if (!empty($arrGroups) && is_array($arrGroups))
-                    {
-                        $objGroupPage = self::findFirstActiveWithJumpToTwoFactorByIds($arrGroups);
-
-                        if ($objGroupPage !== null)
-                        {
-                            $strRedirect = \Controller::generateFrontendUrl($objGroupPage->row(), null, null, true);
-                            if ($_SERVER['REQUEST_URI'] != '/' . $strRedirect && $_SERVER['REDIRECT_URL'] != '/' . $strRedirect)
-                            {
-                                \Controller::redirect($strRedirect);
-                            }
-                        }
-                    }
-                }
-            }
-        }
-        return $strContent;
-    }
-
-    /**
-     * @param $strEmail
-     * @return string
-     */
-    function anonymizeEmail($strEmail)
-    {
-        $arrEmail = explode('@', $strEmail);
-        $strEnd = substr($arrEmail[0], 2);
-        $strStart = substr($arrEmail[0], 0, 2);
-        $strEnd = preg_replace("/(.)/", "*", $strEnd);
-        if (strlen($arrEmail[0]) < 3)
-        {
-            return preg_replace("/(.)/", "*", $arrEmail[0]) . '@' . $arrEmail[1];
-        }
-        else
-        {
-            return $strStart . $strEnd . '@' . $arrEmail[1];
-        }
-    }
 }
 

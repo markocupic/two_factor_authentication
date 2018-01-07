@@ -8,7 +8,12 @@ $GLOBALS['FE_MOD']['user']['twoFactorAuthentication'] = 'MCupic\ModuleTwoFactorA
 /**
  * Hooks
  */
-$GLOBALS['TL_HOOKS']['parseFrontendTemplate'][] = array('MCupic\TwoFactorAuthentication', 'parseFrontendTemplate');
-$GLOBALS['TL_HOOKS']['parseFrontendTemplate'][] = array('MCupic\TwoFactorAuthentication', 'deleteExpiredLoginSets');
+if(TL_MODE === 'FE')
+{
+    $GLOBALS['TL_HOOKS']['postAuthenticate'][] = array('MCupic\TwoFactorAuthentication', 'authenticate');
+    $GLOBALS['TL_HOOKS']['postAuthenticate'][] = array('MCupic\TwoFactorAuthentication', 'deleteExpiredLoginSets');
+}
+
 $GLOBALS['CONFIG']['TwoFactorAuthentication']['expirationTime'] = 30*24*60*60;
+
 
