@@ -14,7 +14,7 @@
  */
 ClassLoader::addNamespaces(array
 (
-	'MCupic',
+    'Markocupic',
 ));
 
 
@@ -23,14 +23,14 @@ ClassLoader::addNamespaces(array
  */
 ClassLoader::addClasses(array
 (
-	// Modules
-	'MCupic\ModuleTwoFactorAuthentication' => 'system/modules/two_factor_authentication/modules/ModuleTwoFactorAuthentication.php',
+    // Modules
+    'Markocupic\ModuleTwoFactorAuthentication' => 'system/modules/two_factor_authentication/modules/ModuleTwoFactorAuthentication.php',
 
-	// Classes
-	'MCupic\TwoFactorAuthentication'       => 'system/modules/two_factor_authentication/classes/TwoFactorAuthentication.php',
+    // Classes
+    'Markocupic\TwoFactorAuthentication'       => 'system/modules/two_factor_authentication/classes/TwoFactorAuthentication.php',
 
-	// Models
-	'Contao\TwoFactorAuthenticationModel'  => 'system/modules/two_factor_authentication/models/TwoFactorAuthenticationModel.php',
+    // Models
+    'Contao\TwoFactorAuthenticationModel'      => 'system/modules/two_factor_authentication/models/TwoFactorAuthenticationModel.php',
 ));
 
 
@@ -39,6 +39,6 @@ ClassLoader::addClasses(array
  */
 TemplateLoader::addFiles(array
 (
-	'mod_two_factor_authentication'        => 'system/modules/two_factor_authentication/templates',
-	'two_factor_authentication_email_body' => 'system/modules/two_factor_authentication/templates',
+    'mod_two_factor_authentication'        => 'system/modules/two_factor_authentication/templates',
+    'two_factor_authentication_email_body' => 'system/modules/two_factor_authentication/templates',
 ));

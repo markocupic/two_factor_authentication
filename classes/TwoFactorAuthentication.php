@@ -3,75 +3,34 @@
 /**
  * Contao Open Source CMS
  *
- * Copyright (c) 2005-2016 Leo Feyer
+ * Copyright (c) 2005-2018 Leo Feyer
  *
- * @package   TwoFactorAuthentication
- * @author    Marko Cupic m.cupic@gmx.ch
- * @license   GNU/LGLP
- * @copyright Marko Cupic 2016
+ * @package     Markocupic
+ * @author      Marko Cupic m.cupic@gmx.ch
+ * @link        https://github.com/markocupic
+ * @license     GNU/LGLP
+ * @copyright   Marko Cupic 2018
  */
 
 
-/**
- * Namespace
- */
-
-namespace MCupic;
+namespace Markocupic;
 
 
 /**
  * Class TwoFactorAuthentication
- *
- * @copyright  Marko Cupic 2016
- * @author     Marko Cupic m.cupic@gmx.ch
- * @package    Devtools
+ * @package Markocupic
  */
 class TwoFactorAuthentication extends \System
 {
-
-
-
-
-
-    /**
-     * @return string
-     */
-    public static function getBrowserFingerprint()
-    {
-
-        $client_ip = \Environment::get('ip');
-        $accept = $_SERVER['HTTP_ACCEPT'];
-        $useragent = $_SERVER['HTTP_USER_AGENT'];
-        $charset = $_SERVER['HTTP_ACCEPT_CHARSET'];
-        $encoding = $_SERVER['HTTP_ACCEPT_ENCODING'];
-        $language = $_SERVER['HTTP_ACCEPT_LANGUAGE'];
-        $data = '';
-        $data .= $client_ip;
-        $data .= $useragent;
-        $data .= $accept;
-        $data .= $charset;
-        $data .= $encoding;
-        $data .= $language;
-
-        /* Apply SHA256 hash to the browser fingerprint */
-        $hash = hash('sha256', $data);
-
-        return $hash;
-
-    }
-
-
 
     /**
      * @param \FrontendUser $objUser
      */
     public function deleteExpiredLoginSets(\FrontendUser $objUser)
     {
-        $expirationTime = $GLOBALS['CONFIG']['TwoFactorAuthentication']['expirationTime'];
+        $expirationTime = \Config::get('twoFactorAuthExpirationTime');
         \Database::getInstance()->prepare('DELETE FROM tl_two_factor_authentication WHERE expiresOn<?')->execute(time() - $expirationTime);
     }
-
-
 
     /**
      * @param \FrontendUser $objUser
@@ -115,25 +74,24 @@ class TwoFactorAuthentication extends \System
             $browserFingerprint = static::getBrowserFingerprint();
 
             // Token is valid for 1 week. After this the user has to renew the token.
-            $expirationTime = $GLOBALS['CONFIG']['TwoFactorAuthentication']['expirationTime'];
+            $expirationTime = \Config::get('twoFactorAuthExpirationTime');
             $objSet = \Database::getInstance()->prepare("SELECT * FROM tl_two_factor_authentication WHERE pid=? AND browserFingerprint=? AND expiresOn > ? AND activated=?")->limit(1)->execute($objUser->id, $browserFingerprint, time() - $expirationTime, '1');
             if ($objSet->numRows)
             {
                 $objTFAM = \TwoFactorAuthenticationModel::findByPk($objSet->id);
                 if ($objTFAM !== null)
                 {
-                    $objTFAM->expiresOn = time() + $GLOBALS['CONFIG']['TwoFactorAuthentication']['expirationTime'];
+                    $objTFAM->expiresOn = time() + \Config::get('twoFactorAuthExpirationTime');
                     $objTFAM->save();
 
                     // Update Session
                     \Database::getInstance()->prepare("UPDATE tl_session SET twoFactorAuthenticated=? WHERE hash=?")
                         ->execute('1', $strHash);
 
-                    // Return everything is ok.
+                    // User session completed: return everything is ok.
                     return;
                 }
             }
-
 
 
             // Authentication failed
@@ -148,37 +106,6 @@ class TwoFactorAuthentication extends \System
                 \Controller::redirect($strRedirect);
             }
         }
-    }
-
-
-
-    /**
-     * Find the first active group with a published jumpToTwoFactor page
-     *
-     * @param string $arrIds An array of ids of member groups the user belongs to
-     *
-     * @return \MemberGroupModel|null The model or null if there is no matching member group
-     */
-    public static function findFirstActiveWithJumpToTwoFactorByIds($arrIds)
-    {
-        if (!is_array($arrIds) || empty($arrIds))
-        {
-            return null;
-        }
-
-
-        $time = \Date::floorToMinute();
-        $objDatabase = \Database::getInstance();
-        $arrIds = array_map('intval', $arrIds);
-
-        $objResult = $objDatabase->prepare("SELECT p.* FROM tl_member_group g LEFT JOIN tl_page p ON g.jumpToTwoFactor=p.id WHERE g.id IN(" . implode(',', $arrIds) . ") AND g.jumpToTwoFactor>0 AND g.redirectToTwoFactor='1' AND g.disable!='1' AND (g.start='' OR g.start<='$time') AND (g.stop='' OR g.stop>'" . ($time + 60) . "') AND p.published='1' AND (p.start='' OR p.start<='$time') AND (p.stop='' OR p.stop>'" . ($time + 60) . "') ORDER BY " . $objDatabase->findInSet('g.id', $arrIds))->limit(1)->execute();
-
-        if ($objResult->numRows < 1)
-        {
-            return null;
-        }
-
-        return \PageModel::findByPk($objResult->id);
     }
 
     /**
@@ -212,6 +139,53 @@ class TwoFactorAuthentication extends \System
         }
 
         return false;
+
+    }
+
+    /**
+     * Find the first active group with a published jumpToTwoFactor page
+     *
+     * @param string $arrIds An array of ids of member groups the user belongs to
+     * @return \MemberGroupModel|null The model or null if there is no matching member group
+     */
+    public static function findFirstActiveWithJumpToTwoFactorByIds($arrIds)
+    {
+        if (!is_array($arrIds) || empty($arrIds))
+        {
+            return null;
+        }
+
+        $time = \Date::floorToMinute();
+        $objDatabase = \Database::getInstance();
+        $arrIds = array_map('intval', $arrIds);
+
+        $objResult = $objDatabase->prepare("SELECT p.* FROM tl_member_group g LEFT JOIN tl_page p ON g.jumpToTwoFactor=p.id WHERE g.id IN(" . implode(',', $arrIds) . ") AND g.jumpToTwoFactor>0 AND g.redirectToTwoFactor='1' AND g.disable!='1' AND (g.start='' OR g.start<='$time') AND (g.stop='' OR g.stop>'" . ($time + 60) . "') AND p.published='1' AND (p.start='' OR p.start<='$time') AND (p.stop='' OR p.stop>'" . ($time + 60) . "') ORDER BY " . $objDatabase->findInSet('g.id', $arrIds))->limit(1)->execute();
+
+        if ($objResult->numRows < 1)
+        {
+            return null;
+        }
+
+        return \PageModel::findByPk($objResult->id);
+    }
+
+    /**
+     * @return string
+     */
+    public static function getBrowserFingerprint()
+    {
+        $fingerPrint = array();
+        $fingerPrint['clientIp'] = \Environment::get('ip');
+        $fingerPrint['accept'] = $_SERVER['HTTP_ACCEPT'];
+        $fingerPrint['useragent'] = \Environment::get('httpUserAgent');
+        $fingerPrint['charset'] = $_SERVER['HTTP_ACCEPT_CHARSET'];
+        $fingerPrint['encoding'] = \Environment::get('httpAcceptEncoding');
+        $fingerPrint['language'] = \Environment::get('httpAcceptLanguage');
+
+        /* Apply SHA256 hash to the browser fingerprint */
+        $hash = hash('sha256', implode('', $fingerPrint));
+
+        return $hash;
 
     }
 

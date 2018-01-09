@@ -3,17 +3,22 @@
 /**
  * Contao Open Source CMS
  *
- * Copyright (c) 2005-2016 Leo Feyer
+ * Copyright (c) 2005-2018 Leo Feyer
  *
- * @license LGPL-3.0+
+ * @package     Markocupic
+ * @author      Marko Cupic m.cupic@gmx.ch
+ * @link        https://github.com/markocupic
+ * @license     GNU/LGLP
+ * @copyright   Marko Cupic 2018
  */
 
-namespace MCupic;
+
+namespace Markocupic;
+
 
 /**
- * Front end module "Two Factor Authentication".
- *
- * @author Leo Feyer <https://github.com/leofeyer>
+ * Class ModuleTwoFactorAuthentication
+ * @package Markocupic
  */
 class ModuleTwoFactorAuthentication extends \Module
 {
@@ -53,6 +58,7 @@ class ModuleTwoFactorAuthentication extends \Module
      * @var null
      */
     protected $case = null;
+
 
     /**
      * @return string
@@ -184,38 +190,37 @@ class ModuleTwoFactorAuthentication extends \Module
 
             if (trim(strtolower(\Input::post('email'))) == trim(strtolower($this->objUser->email)))
             {
-
                 $_SESSION['TFA']['CASE_ENTER_CODE'] = true;
 
                 $browserFingerprint = TwoFactorAuthentication::getBrowserFingerprint();
+                $securityToken = rand(111111, 999999);
 
-                $objModel = new \TwoFactorAuthenticationModel();
+                $objModel = new TwoFactorAuthenticationModel();
                 $objModel->pid = $this->objUser->id;
                 $objModel->browserFingerprint = $browserFingerprint;
-                $verificationEmailToken = rand(111111, 999999);
-                $objModel->verification_email_token = md5($verificationEmailToken);
+                $objModel->verification_email_token = md5($securityToken);
                 $objModel->tstamp = time();
-                $objModel->expiresOn = time() + $GLOBALS['CONFIG']['TwoFactorAuthentication']['expirationTime'];
+                $objModel->expiresOn = time() + \Config::get('twoFactorAuthExpirationTime');
                 $objModel->save();
+
+                // Parse email text
+                $objEmailTemplate = new \FrontendTemplate('two_factor_authentication_email_body');
+                $objEmailTemplate->host = \Environment::get('host');
+                $objEmailTemplate->member = $this->objUser;
+                $objEmailTemplate->code = $securityToken;
+                $emailBody = $objEmailTemplate->parse();
 
                 // Send email
                 $email = new \Email();
                 $email->subject = 'Sicherheitscode für das "' . \Environment::get('host') . '" Konto';
-                // Set the admin e-mail as "from" address
                 $email->from = $GLOBALS['TL_ADMIN_EMAIL'];
                 $email->fromName = 'Administrator';
                 $replyTo = '"' . 'Administrator' . '" <' . $GLOBALS['TL_ADMIN_EMAIL'] . '>';
                 $email->replyTo($replyTo);
-                $objEmailTemplate = new \FrontendTemplate('two_factor_authentication_email_body');
-                $objEmailTemplate->host = \Environment::get('host');
-                $objEmailTemplate->member = $this->objUser;
-                $objEmailTemplate->code = $verificationEmailToken;
-                $emailBody = $objEmailTemplate->parse();
-
                 $email->text = \StringUtil::decodeEntities(trim($emailBody));
-
                 $email->sendTo($this->objUser->email);
 
+                // Reload page
                 $this->reload();
             }
             else
@@ -236,7 +241,7 @@ class ModuleTwoFactorAuthentication extends \Module
                 $objSet = \Database::getInstance()->prepare('SELECT * FROM tl_two_factor_authentication WHERE pid=? AND browserFingerprint=? AND verification_email_token = ? AND activated = ? AND tstamp > ?')->limit(1)->execute($this->objUser->id, $browserFingerprint, md5(\Input::post('verification_email_token')), '', time() - 600);
                 if ($objSet->numRows)
                 {
-                    $objTFAM = \TwoFactorAuthenticationModel::findByPk($objSet->id);
+                    $objTFAM = TwoFactorAuthenticationModel::findByPk($objSet->id);
                     if ($objTFAM !== null)
                     {
                         $objTFAM->activated = '1';
@@ -266,6 +271,37 @@ class ModuleTwoFactorAuthentication extends \Module
 
 
         return parent::generate();
+    }
+
+
+    /**
+     * @return bool
+     */
+    protected function hasValidCode()
+    {
+
+        if (!FE_USER_LOGGED_IN)
+        {
+            return false;
+        }
+
+        $objMember = \FrontendUser::getInstance();
+        if ($objMember === null)
+        {
+            return false;
+        }
+
+        $browserFingerprint = TwoFactorAuthentication::getBrowserFingerprint();
+
+        // token is valid for 10 min. After the user has to generate a new token.
+        $objSet = \Database::getInstance()->prepare("SELECT * FROM tl_two_factor_authentication WHERE pid=? AND browserFingerprint=? AND tstamp > ? AND activated=?")->limit(1)->execute($objMember->id, $browserFingerprint, time() - 600, '');
+        if ($objSet->numRows)
+        {
+            return true;
+        }
+
+        return false;
+
     }
 
 
@@ -325,36 +361,5 @@ class ModuleTwoFactorAuthentication extends \Module
         {
             return $strStart . $strEnd . '@' . $arrEmail[1];
         }
-    }
-
-
-    /**
-     * @return bool
-     */
-    protected function hasValidCode()
-    {
-
-        if (!FE_USER_LOGGED_IN)
-        {
-            return false;
-        }
-
-        $objMember = \FrontendUser::getInstance();
-        if ($objMember === null)
-        {
-            return false;
-        }
-
-        $browserFingerprint = TwoFactorAuthentication::getBrowserFingerprint();
-
-        // token is valid for 10 min. After the user has to generate a new token.
-        $objSet = \Database::getInstance()->prepare("SELECT * FROM tl_two_factor_authentication WHERE pid=? AND browserFingerprint=? AND tstamp > ? AND activated=?")->limit(1)->execute($objMember->id, $browserFingerprint, time() - 600, '');
-        if ($objSet->numRows)
-        {
-            return true;
-        }
-
-        return false;
-
     }
 }

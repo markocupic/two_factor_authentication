@@ -1,19 +1,37 @@
 <?php
 
 /**
+ * Contao Open Source CMS
+ *
+ * Copyright (c) 2005-2018 Leo Feyer
+ *
+ * @package     Markocupic
+ * @author      Marko Cupic m.cupic@gmx.ch
+ * @link        https://github.com/markocupic
+ * @license     GNU/LGLP
+ * @copyright   Marko Cupic 2018
+ */
+
+/**
  * Front end modules
  */
-$GLOBALS['FE_MOD']['user']['twoFactorAuthentication'] = 'MCupic\ModuleTwoFactorAuthentication';
+$GLOBALS['FE_MOD']['user']['twoFactorAuthentication'] = 'Markocupic\ModuleTwoFactorAuthentication';
 
 /**
  * Hooks
  */
-if(TL_MODE === 'FE')
+if (TL_MODE === 'FE')
 {
-    $GLOBALS['TL_HOOKS']['postAuthenticate'][] = array('MCupic\TwoFactorAuthentication', 'authenticate');
-    $GLOBALS['TL_HOOKS']['postAuthenticate'][] = array('MCupic\TwoFactorAuthentication', 'deleteExpiredLoginSets');
+    $GLOBALS['TL_HOOKS']['postAuthenticate'][] = array('Markocupic\TwoFactorAuthentication', 'authenticate');
+    $GLOBALS['TL_HOOKS']['postAuthenticate'][] = array('Markocupic\TwoFactorAuthentication', 'deleteExpiredLoginSets');
 }
 
-$GLOBALS['CONFIG']['TwoFactorAuthentication']['expirationTime'] = 30*24*60*60;
+
+/**
+ * Config
+ */
+
+// Set expiration time to 1 month
+\Contao\Config::set('twoFactorAuthExpirationTime', 30 * 24 * 60 * 60);
 
 
