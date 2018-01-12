@@ -195,7 +195,7 @@ class ModuleTwoFactorAuthentication extends \Module
                 $browserFingerprint = TwoFactorAuthentication::getBrowserFingerprint();
                 $securityToken = rand(111111, 999999);
 
-                $objModel = new TwoFactorAuthenticationModel();
+                $objModel = new \TwoFactorAuthenticationModel();
                 $objModel->pid = $this->objUser->id;
                 $objModel->browserFingerprint = $browserFingerprint;
                 $objModel->verification_email_token = md5($securityToken);
@@ -241,7 +241,7 @@ class ModuleTwoFactorAuthentication extends \Module
                 $objSet = \Database::getInstance()->prepare('SELECT * FROM tl_two_factor_authentication WHERE pid=? AND browserFingerprint=? AND verification_email_token = ? AND activated = ? AND tstamp > ?')->limit(1)->execute($this->objUser->id, $browserFingerprint, md5(\Input::post('verification_email_token')), '', time() - 600);
                 if ($objSet->numRows)
                 {
-                    $objTFAM = TwoFactorAuthenticationModel::findByPk($objSet->id);
+                    $objTFAM = \TwoFactorAuthenticationModel::findByPk($objSet->id);
                     if ($objTFAM !== null)
                     {
                         $objTFAM->activated = '1';

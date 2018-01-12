@@ -26,20 +26,33 @@ class TwoFactorAuthentication extends \System
     /**
      * @param \FrontendUser $objUser
      */
-    public function deleteExpiredLoginSets(\FrontendUser $objUser)
+    public function deleteExpiredLoginSets(\User $objUser)
     {
-        $expirationTime = \Config::get('twoFactorAuthExpirationTime');
-        \Database::getInstance()->prepare('DELETE FROM tl_two_factor_authentication WHERE expiresOn<?')->execute(time() - $expirationTime);
+        if (FE_USER_LOGGED_IN)
+        {
+            $expirationTime = \Config::get('twoFactorAuthExpirationTime');
+            \Database::getInstance()->prepare('DELETE FROM tl_two_factor_authentication WHERE expiresOn<?')->execute(time() - $expirationTime);
+        }
     }
 
     /**
      * @param \FrontendUser $objUser
      */
-    public function authenticate(\FrontendUser $objUser)
+    public function authenticate(\User $objUser)
     {
+        // Enable direct login for backend preview
+        if ($objUser instanceof \Contao\BackendUser)
+        {
+            if ($objUser->isAdmin && $_POST['FORM_SUBMIT'] == 'tl_switch' && \Input::post('user') != '')
+            {
+                //@todo
+                //die(print_r($_SESSION,true));
+                //return;
+            }
+        }
+
         if (FE_USER_LOGGED_IN)
         {
-
             if (self::isLoggedIn())
             {
                 // User is logged in by two factor authentication
