@@ -40,19 +40,54 @@ class TwoFactorAuthentication extends \System
      */
     public function authenticate(\User $objUser)
     {
-        // Enable direct login for backend preview
-        if ($objUser instanceof \Contao\BackendUser)
-        {
-            if ($objUser->isAdmin && $_POST['FORM_SUBMIT'] == 'tl_switch' && \Input::post('user') != '')
-            {
-                //@todo
-                //die(print_r($_SESSION,true));
-                //return;
-            }
-        }
 
         if (FE_USER_LOGGED_IN)
         {
+
+            // Autologin for backend administrators when using the frontend preview in the backend
+            if ($objUser instanceof \Contao\FrontendUser)
+            {
+
+                $strIp = \Environment::get('ip');
+                $strCookie = 'FE_USER_AUTH';
+                $strHash = sha1(session_id() . (!\Config::get('disableIpCheck') ? $strIp : '') . $strCookie);
+
+                $objSessionFe = \Database::getInstance()->prepare('SELECT * FROM tl_session WHERE sessionID=? && name=? && hash=?')->limit(1)->execute(session_id(), $strCookie, $strHash);
+                if ($objSessionFe->numRows)
+                {
+
+                    $strCookie = 'BE_USER_AUTH';
+                    $objSessionBe = \Database::getInstance()->prepare('SELECT * FROM tl_session WHERE sessionID=? AND name=?')->limit(1)->execute($objSessionFe->sessionID, $strCookie);
+                    if ($objSessionBe->numRows)
+                    {
+                        $objBeUser = \UserModel::findByPk($objSessionBe->pid);
+                        if ($objBeUser !== null)
+                        {
+                            if ($objBeUser->admin)
+                            {
+                                $objFeUser = \Database::getInstance()->prepare('SELECT * FROM tl_member WHERE id=?')->limit(1)->execute($objSessionFe->pid);
+                                if ($objFeUser->numRows)
+                                {
+                                    $arrGroupsUserBelongsTo = deserialize($objFeUser->groups);
+                                    if (!empty($arrGroupsUserBelongsTo) && is_array($arrGroupsUserBelongsTo))
+                                    {
+                                        $objPage = static::findFirstActiveWithJumpToTwoFactorByIds($arrGroupsUserBelongsTo);
+                                        if ($objPage !== null)
+                                        {
+                                            // Two factor authentication is used for this user
+                                            // Return everything is ok.
+                                            \Database::getInstance()->prepare('UPDATE tl_session SET twoFactorAuthenticated=? WHERE id=?')->execute('1', $objSessionFe->id);
+                                            return;
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+
+
             if (self::isLoggedIn())
             {
                 // User is logged in by two factor authentication
@@ -122,9 +157,38 @@ class TwoFactorAuthentication extends \System
     }
 
     /**
+     * Find the first active group with a published jumpToTwoFactor page
+     *
+     * @param string $arrIds An array of ids of member groups the user belongs to
+     * @return \MemberGroupModel|null The model or null if there is no matching member group
+     */
+    public
+    static function findFirstActiveWithJumpToTwoFactorByIds($arrIds)
+    {
+        if (!is_array($arrIds) || empty($arrIds))
+        {
+            return null;
+        }
+
+        $time = \Date::floorToMinute();
+        $objDatabase = \Database::getInstance();
+        $arrIds = array_map('intval', $arrIds);
+
+        $objResult = $objDatabase->prepare("SELECT p.* FROM tl_member_group g LEFT JOIN tl_page p ON g.jumpToTwoFactor=p.id WHERE g.id IN(" . implode(',', $arrIds) . ") AND g.jumpToTwoFactor>0 AND g.redirectToTwoFactor='1' AND g.disable!='1' AND (g.start='' OR g.start<='$time') AND (g.stop='' OR g.stop>'" . ($time + 60) . "') AND p.published='1' AND (p.start='' OR p.start<='$time') AND (p.stop='' OR p.stop>'" . ($time + 60) . "') ORDER BY " . $objDatabase->findInSet('g.id', $arrIds))->limit(1)->execute();
+
+        if ($objResult->numRows < 1)
+        {
+            return null;
+        }
+
+        return \PageModel::findByPk($objResult->id);
+    }
+
+    /**
      * @return bool
      */
-    public static function isLoggedIn()
+    public
+    static function isLoggedIn()
     {
 
         if (!FE_USER_LOGGED_IN)
@@ -156,36 +220,10 @@ class TwoFactorAuthentication extends \System
     }
 
     /**
-     * Find the first active group with a published jumpToTwoFactor page
-     *
-     * @param string $arrIds An array of ids of member groups the user belongs to
-     * @return \MemberGroupModel|null The model or null if there is no matching member group
-     */
-    public static function findFirstActiveWithJumpToTwoFactorByIds($arrIds)
-    {
-        if (!is_array($arrIds) || empty($arrIds))
-        {
-            return null;
-        }
-
-        $time = \Date::floorToMinute();
-        $objDatabase = \Database::getInstance();
-        $arrIds = array_map('intval', $arrIds);
-
-        $objResult = $objDatabase->prepare("SELECT p.* FROM tl_member_group g LEFT JOIN tl_page p ON g.jumpToTwoFactor=p.id WHERE g.id IN(" . implode(',', $arrIds) . ") AND g.jumpToTwoFactor>0 AND g.redirectToTwoFactor='1' AND g.disable!='1' AND (g.start='' OR g.start<='$time') AND (g.stop='' OR g.stop>'" . ($time + 60) . "') AND p.published='1' AND (p.start='' OR p.start<='$time') AND (p.stop='' OR p.stop>'" . ($time + 60) . "') ORDER BY " . $objDatabase->findInSet('g.id', $arrIds))->limit(1)->execute();
-
-        if ($objResult->numRows < 1)
-        {
-            return null;
-        }
-
-        return \PageModel::findByPk($objResult->id);
-    }
-
-    /**
      * @return string
      */
-    public static function getBrowserFingerprint()
+    public
+    static function getBrowserFingerprint()
     {
         $fingerPrint = array();
         $fingerPrint['clientIp'] = \Environment::get('ip');
